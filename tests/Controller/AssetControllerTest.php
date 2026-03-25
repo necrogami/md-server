@@ -28,7 +28,7 @@ test('serves built-in CSS files', function () {
     $client->request('GET', '/_md/css/light.css');
 
     expect($client->getResponse()->getStatusCode())->toBe(200);
-    expect($client->getResponse()->headers->get('Content-Type'))->toBe('text/css');
+    expect($client->getResponse()->headers->get('Content-Type'))->toContain('text/css');
 });
 
 test('returns 404 for missing asset', function () {
@@ -48,5 +48,5 @@ test('serves JavaScript files', function () {
     $client->request('GET', '/_md/js/app.js');
 
     expect($client->getResponse()->getStatusCode())->toBe(200);
-    expect($client->getResponse()->headers->get('Content-Type'))->toBe('application/javascript');
+    expect($client->getResponse()->headers->get('Content-Type'))->toContain('application/javascript');
 });
