@@ -2,24 +2,13 @@
 
 use MdServer\Service\ThemeResolver;
 
-function rmdir_theme_recursive(string $dir): void
-{
-    if (!is_dir($dir)) return;
-    foreach (scandir($dir) as $item) {
-        if ($item === '.' || $item === '..') continue;
-        $path = $dir . '/' . $item;
-        is_dir($path) ? rmdir_theme_recursive($path) : unlink($path);
-    }
-    rmdir($dir);
-}
-
 beforeEach(function () {
     $this->tempDir = sys_get_temp_dir() . '/md-theme-test-' . uniqid();
     mkdir($this->tempDir, 0755, true);
 });
 
 afterEach(function () {
-    rmdir_theme_recursive($this->tempDir);
+    rmdir_recursive($this->tempDir);
 });
 
 test('returns built-in themes only when no custom themes exist', function () {

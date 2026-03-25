@@ -2,21 +2,6 @@
 
 use MdServer\Service\FileTreeBuilder;
 
-function rmdir_recursive(string $dir): void
-{
-    if (!is_dir($dir)) return;
-    $items = scandir($dir);
-    foreach ($items as $item) {
-        if ($item === '.' || $item === '..') continue;
-        $path = $dir . '/' . $item;
-        if (is_dir($path)) {
-            rmdir_recursive($path);
-        } else {
-            unlink($path);
-        }
-    }
-    rmdir($dir);
-}
 
 $tempDir = '';
 
