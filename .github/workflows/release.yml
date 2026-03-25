@@ -63,7 +63,7 @@ jobs:
 
   build-linux:
     name: Build Linux (${{ matrix.arch }})
-    needs: test
+    needs: build-phar
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -112,7 +112,7 @@ jobs:
 
   build-macos:
     name: Build macOS (${{ matrix.arch }})
-    needs: test
+    needs: build-phar
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
