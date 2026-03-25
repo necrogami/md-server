@@ -1,0 +1,10 @@
+{# templates/page.html.twig #}
+{% extends 'layout.html.twig' %}
+
+{% block title %}{{ page.title }} — md-server{% endblock %}
+
+{% block content %}
+<article class="md-article markdown-body">
+    {{ page.renderedHtml|raw }}
+</article>
+{% endblock %}

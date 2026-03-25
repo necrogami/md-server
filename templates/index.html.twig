@@ -1,0 +1,25 @@
+{# templates/index.html.twig #}
+{% extends 'layout.html.twig' %}
+
+{% block title %}Index — md-server{% endblock %}
+
+{% block content %}
+<article class="md-article markdown-body">
+    <h1>Documentation</h1>
+    {% if entries is not empty %}
+    <ul>
+        {% for entry in entries %}
+        <li>
+            {% if entry.type == 'directory' %}
+            <a href="/{{ entry.path }}">{{ entry.title }}/</a>
+            {% else %}
+            <a href="/{{ entry.path|replace({'.md': ''}) }}">{{ entry.title }}</a>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No markdown files found in this directory.</p>
+    {% endif %}
+</article>
+{% endblock %}

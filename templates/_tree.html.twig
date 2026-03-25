@@ -1,0 +1,20 @@
+{# templates/_tree.html.twig #}
+<ul class="md-tree">
+{% for node in tree %}
+    {% if node.type == 'directory' %}
+    <li class="md-tree-dir">
+        <details{% if current_path starts with node.path %} open{% endif %}>
+            <summary>
+                <a href="/{{ node.path }}">{{ node.title }}</a>
+            </summary>
+            {{ include('_tree.html.twig', { tree: node.children, current_path: current_path }) }}
+        </details>
+    </li>
+    {% else %}
+    {% set file_path = node.path|replace({'.md': ''}) %}
+    <li class="md-tree-file{% if current_path == file_path %} active{% endif %}">
+        <a href="/{{ file_path }}">{{ node.title }}</a>
+    </li>
+    {% endif %}
+{% endfor %}
+</ul>

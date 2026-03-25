@@ -1,0 +1,69 @@
+{# templates/layout.html.twig #}
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ theme_mode }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}md-server{% endblock %}</title>
+    <link rel="stylesheet" href="/_md/css/{{ active_theme }}.css" id="theme-stylesheet">
+    {% if override_css %}
+    <link rel="stylesheet" href="/_md/theme/override.css">
+    {% endif %}
+    <link rel="stylesheet" href="/_md/vendor/katex/katex.min.css">
+    <link rel="stylesheet" href="/_md/vendor/prism/prism.css">
+</head>
+<body>
+    <header class="md-header">
+        <div class="md-header-title">md-server</div>
+        <div class="md-header-actions">
+            {% if has_custom_themes %}
+            <select id="theme-switcher" class="md-theme-switcher">
+                {% for theme in available_themes %}
+                <option value="{{ theme }}"{% if theme == active_theme %} selected{% endif %}>
+                    {{ theme|capitalize }}
+                </option>
+                {% endfor %}
+            </select>
+            {% else %}
+            <button id="theme-toggle" class="md-theme-toggle" aria-label="Toggle dark/light mode">
+                <span class="theme-icon-light">☀</span>
+                <span class="theme-icon-dark">☾</span>
+            </button>
+            {% endif %}
+        </div>
+    </header>
+
+    <div class="md-container">
+        {% if show_tree %}
+        <nav class="md-sidebar" aria-label="Documentation navigation">
+            {% block sidebar %}
+            {{ include('_tree.html.twig', { tree: tree, current_path: current_path|default('') }) }}
+            {% endblock %}
+        </nav>
+        {% endif %}
+
+        <main class="md-content">
+            {% if breadcrumbs is defined and breadcrumbs is not empty %}
+            <nav class="md-breadcrumbs" aria-label="Breadcrumb">
+                <a href="/">Home</a>
+                {% for crumb in breadcrumbs %}
+                <span class="md-breadcrumb-sep">/</span>
+                {% if not loop.last %}
+                <a href="/{{ breadcrumb_paths[loop.index0] }}">{{ crumb }}</a>
+                {% else %}
+                <span>{{ crumb }}</span>
+                {% endif %}
+                {% endfor %}
+            </nav>
+            {% endif %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="/_md/vendor/prism/prism.min.js"></script>
+    <script src="/_md/vendor/mermaid/mermaid.min.js"></script>
+    <script src="/_md/vendor/katex/katex.min.js"></script>
+    <script src="/_md/js/app.js"></script>
+</body>
+</html>
