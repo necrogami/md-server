@@ -1,5 +1,6 @@
 /vendor/
 /.phpunit.cache/
 /var/
+/tools/
 *.phar
 .env.local

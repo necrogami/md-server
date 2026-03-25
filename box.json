@@ -17,21 +17,24 @@
                 "tests",
                 "test",
                 "Tests",
-                "Test",
                 "docs",
                 "doc"
             ]
         },
         {
             "in": "vendor",
-            "name": ["*.js", "*.css", "*.woff2", "*.woff", "*.ttf"]
+            "name": ["*.js", "*.css", "*.woff2", "*.woff", "*.ttf", "*.template", "*.xml", "*.xsd", "*.yaml", "*.yml", "*.twig", "*.bash", "*.zsh", "*.fish", "*.svg", "*.base64", "*.exe"],
+            "exclude": [
+                "tests",
+                "test",
+                "Tests",
+                "docs",
+                "doc"
+            ]
         }
     ],
     "main": "bin/md-server",
     "output": "md-server.phar",
     "stub": true,
-    "compression": "GZ",
-    "compactors": [
-        "KevinGH\\Box\\Compactor\\Php"
-    ]
+    "compression": "GZ"
 }

@@ -76,12 +76,24 @@ class AssetController extends AbstractController
 
     private function serveFile(string $path, string $contentType): Response
     {
-        $realPath = realpath($path);
-        if ($realPath === false || !is_file($realPath)) {
+        // realpath() doesn't work with phar:// paths — use is_file() directly
+        if (!is_file($path)) {
             throw $this->createNotFoundException();
         }
 
-        $response = new BinaryFileResponse($realPath);
+        // BinaryFileResponse doesn't support phar:// — read content directly
+        if (str_starts_with($path, 'phar://')) {
+            $content = file_get_contents($path);
+            if ($content === false) {
+                throw $this->createNotFoundException();
+            }
+            $response = new Response($content);
+            $response->headers->set('Content-Type', $contentType);
+            $response->headers->set('Cache-Control', 'no-store');
+            return $response;
+        }
+
+        $response = new BinaryFileResponse($path);
         $response->headers->set('Content-Type', $contentType);
         $response->headers->set('Cache-Control', 'no-store');
         return $response;

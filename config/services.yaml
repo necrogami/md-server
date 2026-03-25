@@ -17,9 +17,12 @@ services:
         resource: '../src/Controller/'
         tags: ['controller.service_arguments']
 
+    # Explicit registrations (required for PHAR — resource glob doesn't work with phar:// paths)
     MdServer\Service\ConfigLoader:
         arguments:
             $servingRoot: '%md_server.root%'
+
+    MdServer\Service\FileTreeBuilder: ~
 
     MdServer\Service\ThemeResolver:
         arguments:
@@ -28,3 +31,11 @@ services:
     MdServer\Service\MarkdownRenderer:
         factory: ['MdServer\Service\MarkdownRenderer', 'fromConfig']
         arguments: ['@MdServer\Service\ConfigLoader']
+
+    MdServer\Controller\PageController:
+        tags: ['controller.service_arguments']
+
+    MdServer\Controller\AssetController:
+        tags: ['controller.service_arguments']
+
+    MdServer\Command\ServeCommand: ~
