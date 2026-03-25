@@ -18,5 +18,6 @@
     <php>
         <env name="APP_ENV" value="test"/>
         <env name="APP_DEBUG" value="1"/>
+        <env name="KERNEL_CLASS" value="MdServer\Kernel"/>
     </php>
 </phpunit>

@@ -1,4 +1,6 @@
 parameters:
+    md_server.root: '%env(default:md_server_root_default:MD_SERVER_ROOT)%'
+    md_server_root_default: '.'
 
 services:
     _defaults:
@@ -14,3 +16,15 @@ services:
     MdServer\Controller\:
         resource: '../src/Controller/'
         tags: ['controller.service_arguments']
+
+    MdServer\Service\ConfigLoader:
+        arguments:
+            $servingRoot: '%md_server.root%'
+
+    MdServer\Service\ThemeResolver:
+        arguments:
+            $servingRoot: '%md_server.root%'
+
+    MdServer\Service\MarkdownRenderer:
+        factory: ['MdServer\Service\MarkdownRenderer', 'fromConfig']
+        arguments: ['@MdServer\Service\ConfigLoader']

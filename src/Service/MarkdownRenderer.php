@@ -28,6 +28,12 @@ class MarkdownRenderer
         $this->converter = new MarkdownConverter($environment);
     }
 
+    public static function fromConfig(ConfigLoader $configLoader): self
+    {
+        $config = $configLoader->load();
+        return new self($config->extensions);
+    }
+
     public function render(string $markdown): RenderResult
     {
         $markdown = $this->preprocessMermaid($markdown);
