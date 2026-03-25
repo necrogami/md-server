@@ -36,5 +36,6 @@
     "main": "bin/md-server",
     "output": "md-server.phar",
     "stub": true,
-    "compression": "GZ"
+    "compression": "GZ",
+    "check-requirements": false
 }
