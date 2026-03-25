@@ -1,0 +1,186 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, xml, ctype, iconv
+          ini-values: phar.readonly=0
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run tests
+        run: vendor/bin/pest --no-coverage
+
+  build-phar:
+    name: Build PHAR
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, xml, ctype, iconv
+          ini-values: phar.readonly=0
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-dev --classmap-authoritative
+
+      - name: Download Box
+        run: curl -sL https://github.com/box-project/box/releases/latest/download/box.phar -o box.phar
+
+      - name: Compile PHAR
+        run: php box.phar compile
+
+      - name: Verify PHAR
+        run: APP_ENV=prod APP_DEBUG=0 php md-server.phar list
+
+      - name: Upload PHAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: md-server-phar
+          path: md-server.phar
+
+  build-linux:
+    name: Build Linux (${{ matrix.arch }})
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            platform: linux/amd64
+          - arch: aarch64
+            platform: linux/arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        if: matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare app
+        run: |
+          echo 'APP_ENV=prod' > .env.local
+          echo 'APP_DEBUG=0' >> .env.local
+
+      - name: Build static binary
+        run: |
+          docker buildx build \
+            --platform ${{ matrix.platform }} \
+            --build-arg PLATFORM=${{ matrix.platform }} \
+            --load \
+            -t md-server-static \
+            -f static-build.Dockerfile .
+
+      - name: Extract binary
+        run: |
+          docker create --name extract md-server-static
+          docker cp extract:/go/src/app/dist/frankenphp-linux-${{ matrix.arch }} md-server-linux-${{ matrix.arch }}
+          docker rm extract
+          chmod +x md-server-linux-${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: md-server-linux-${{ matrix.arch }}
+          path: md-server-linux-${{ matrix.arch }}
+
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: macos-13
+          - arch: aarch64
+            runner: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare app
+        run: |
+          echo 'APP_ENV=prod' > .env.local
+          echo 'APP_DEBUG=0' >> .env.local
+
+      - name: Clone FrankenPHP
+        run: git clone --depth=1 https://github.com/dunglas/frankenphp /tmp/frankenphp
+
+      - name: Build static binary
+        working-directory: /tmp/frankenphp
+        run: |
+          EMBED=${{ github.workspace }} \
+          PHP_EXTENSIONS="mbstring,xml,dom,ctype,iconv,tokenizer,filter,phar,zlib,opcache,simplexml,yaml" \
+          ./build-static.sh
+
+      - name: Copy binary
+        run: |
+          cp /tmp/frankenphp/dist/frankenphp-mac-${{ matrix.arch }} md-server-darwin-${{ matrix.arch }}
+          chmod +x md-server-darwin-${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: md-server-darwin-${{ matrix.arch }}
+          path: md-server-darwin-${{ matrix.arch }}
+
+  release:
+    name: Create Release
+    needs: [build-phar, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release/
+          cp dist/md-server-phar/md-server.phar release/
+          cp dist/md-server-linux-x86_64/md-server-linux-x86_64 release/
+          cp dist/md-server-linux-aarch64/md-server-linux-aarch64 release/
+          cp dist/md-server-darwin-x86_64/md-server-darwin-x86_64 release/
+          cp dist/md-server-darwin-aarch64/md-server-darwin-aarch64 release/
+          cd release && sha256sum * > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/md-server.phar
+            release/md-server-linux-x86_64
+            release/md-server-linux-aarch64
+            release/md-server-darwin-x86_64
+            release/md-server-darwin-aarch64
+            release/checksums.txt
