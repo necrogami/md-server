@@ -1,0 +1,24 @@
+server:
+  host: "127.0.0.1"
+  port: 8080
+
+markdown:
+  extensions:
+    gfm: true
+    frontmatter: true
+    mermaid: true
+    math: true
+    syntax_highlight: true
+
+navigation:
+  show_tree: true
+  ignore:
+    - "vendor/"
+    - "node_modules/"
+    - ".git/"
+    - "*.log"
+
+theme:
+  mode: "auto"
+  custom_file: ~
+  custom_dir: ~
