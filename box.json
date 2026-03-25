@@ -1,0 +1,37 @@
+{
+    "directories": [
+        "src",
+        "config",
+        "templates",
+        "assets"
+    ],
+    "files": [
+        "router.php",
+        ".env"
+    ],
+    "finder": [
+        {
+            "in": "vendor",
+            "name": "*.php",
+            "exclude": [
+                "tests",
+                "test",
+                "Tests",
+                "Test",
+                "docs",
+                "doc"
+            ]
+        },
+        {
+            "in": "vendor",
+            "name": ["*.js", "*.css", "*.woff2", "*.woff", "*.ttf"]
+        }
+    ],
+    "main": "bin/md-server",
+    "output": "md-server.phar",
+    "stub": true,
+    "compression": "GZ",
+    "compactors": [
+        "KevinGH\\Box\\Compactor\\Php"
+    ]
+}
