@@ -1,0 +1,8 @@
+framework:
+    secret: '%env(default:app_secret:APP_SECRET)%'
+    test: ~
+    router:
+        utf8: true
+
+parameters:
+    app_secret: 'md-server-not-secret'

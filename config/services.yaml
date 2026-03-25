@@ -1,0 +1,16 @@
+parameters:
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    MdServer\:
+        resource: '../src/'
+        exclude:
+            - '../src/Model/'
+            - '../src/Kernel.php'
+
+    MdServer\Controller\:
+        resource: '../src/Controller/'
+        tags: ['controller.service_arguments']
