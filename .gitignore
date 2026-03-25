@@ -4,3 +4,4 @@
 /tools/
 *.phar
 .env.local
+composer.lock

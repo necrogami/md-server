@@ -23,7 +23,7 @@ jobs:
           coverage: none
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress
+        run: composer update --prefer-dist --no-progress
 
       - name: Run tests
         run: vendor/bin/pest --no-coverage
@@ -44,7 +44,7 @@ jobs:
           coverage: none
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress --no-dev --classmap-authoritative
+        run: composer update --prefer-dist --no-progress --no-dev --classmap-authoritative
 
       - name: Download Box
         run: curl -sL https://github.com/box-project/box/releases/latest/download/box.phar -o box.phar
