@@ -113,8 +113,77 @@ jobs:
       - name: Generate checksums
         run: cd release && sha256sum * > checksums.txt
 
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Find previous tag
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${CURRENT_TAG}$" | head -1)
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          {
+            echo "NOTES<<RELEASE_EOF"
+
+            # Group commits by type
+            FEATURES=$(git log "$RANGE" --pretty=format:"%s" --no-merges | grep -i "^feat" | sed 's/^feat[:(]*//' | sed 's/^[[:space:]]*/- /' || true)
+            FIXES=$(git log "$RANGE" --pretty=format:"%s" --no-merges | grep -i "^fix" | sed 's/^fix[:(]*//' | sed 's/^[[:space:]]*/- /' || true)
+            OTHER=$(git log "$RANGE" --pretty=format:"%s" --no-merges | grep -iv "^feat\|^fix\|^docs\|^ci\|^chore\|^style\|^refactor" | sed 's/^/- /' || true)
+            DOCS=$(git log "$RANGE" --pretty=format:"%s" --no-merges | grep -i "^docs" | sed 's/^docs[:(]*//' | sed 's/^[[:space:]]*/- /' || true)
+
+            if [ -n "$FEATURES" ]; then
+              echo "## Features"
+              echo "$FEATURES"
+              echo ""
+            fi
+
+            if [ -n "$FIXES" ]; then
+              echo "## Fixes"
+              echo "$FIXES"
+              echo ""
+            fi
+
+            if [ -n "$DOCS" ]; then
+              echo "## Documentation"
+              echo "$DOCS"
+              echo ""
+            fi
+
+            if [ -n "$OTHER" ]; then
+              echo "## Other"
+              echo "$OTHER"
+              echo ""
+            fi
+
+            echo "## Artifacts"
+            echo ""
+            echo "| File | Platform | Requires |"
+            echo "|------|----------|----------|"
+            echo "| \`md-server.phar\` | Any | PHP 8.2+ |"
+            echo "| \`md-server-linux-x86_64\` | Linux x86_64 | None |"
+            echo "| \`md-server-linux-aarch64\` | Linux ARM64 | None |"
+            echo "| \`md-server-darwin-x86_64\` | macOS Intel | None |"
+            echo "| \`md-server-darwin-aarch64\` | macOS Apple Silicon | None |"
+            echo ""
+            echo "### Quick start"
+            echo "\`\`\`bash"
+            echo "# PHAR"
+            echo "php md-server.phar serve --root=./docs"
+            echo ""
+            echo "# Static binary (no PHP needed)"
+            echo "chmod +x md-server-linux-x86_64"
+            echo "./md-server-linux-x86_64 serve --root=./docs"
+            echo "\`\`\`"
+
+            echo "RELEASE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body: ${{ steps.notes.outputs.NOTES }}
           files: release/*
