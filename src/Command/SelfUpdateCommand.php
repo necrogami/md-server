@@ -1,0 +1,192 @@
+<?php
+
+namespace MdServer\Command;
+
+use MdServer\Version;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
+
+#[AsCommand(
+    name: 'self-update',
+    description: 'Update md-server to the latest version',
+)]
+class SelfUpdateCommand extends Command
+{
+    private const string API_URL = 'https://api.github.com/repos/%s/releases/latest';
+
+    protected function configure(): void
+    {
+        $this
+            ->addOption('check', null, InputOption::VALUE_NONE, 'Only check for updates, do not install')
+        ;
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = new SymfonyStyle($input, $output);
+
+        $io->text(sprintf('Current version: <info>%s</info>', Version::CURRENT));
+
+        $release = $this->fetchLatestRelease();
+        if ($release === null) {
+            $io->error('Failed to fetch latest release from GitHub.');
+            return Command::FAILURE;
+        }
+
+        $latestVersion = ltrim($release['tag_name'], 'v');
+        $currentVersion = ltrim(Version::CURRENT, 'v');
+
+        if ($currentVersion === 'dev') {
+            $io->warning('Running a development build. Use --check to see the latest release.');
+            if ($input->getOption('check')) {
+                $io->text(sprintf('Latest release: <info>%s</info>', $release['tag_name']));
+                return Command::SUCCESS;
+            }
+        }
+
+        if ($currentVersion !== 'dev' && version_compare($currentVersion, $latestVersion, '>=')) {
+            $io->success(sprintf('Already up to date (%s).', Version::CURRENT));
+            return Command::SUCCESS;
+        }
+
+        $io->text(sprintf('Latest version: <info>%s</info>', $release['tag_name']));
+
+        if ($input->getOption('check')) {
+            $io->note('Run without --check to install the update.');
+            return Command::SUCCESS;
+        }
+
+        $assetName = $this->detectAssetName();
+        if ($assetName === null) {
+            $io->error('Could not determine the correct binary for this platform.');
+            return Command::FAILURE;
+        }
+
+        $downloadUrl = $this->findAssetUrl($release, $assetName);
+        if ($downloadUrl === null) {
+            $io->error(sprintf('Asset "%s" not found in release %s.', $assetName, $release['tag_name']));
+            return Command::FAILURE;
+        }
+
+        $io->text(sprintf('Downloading <info>%s</info>...', $assetName));
+
+        $binaryPath = $this->getCurrentBinaryPath();
+        if ($binaryPath === null) {
+            $io->error('Could not determine the current binary path.');
+            return Command::FAILURE;
+        }
+
+        if (!is_writable($binaryPath)) {
+            $io->error(sprintf('Cannot write to %s — try running with sudo.', $binaryPath));
+            return Command::FAILURE;
+        }
+
+        $tempPath = $binaryPath . '.tmp';
+        $downloaded = $this->download($downloadUrl, $tempPath);
+        if (!$downloaded) {
+            @unlink($tempPath);
+            $io->error('Download failed.');
+            return Command::FAILURE;
+        }
+
+        chmod($tempPath, 0755);
+        rename($tempPath, $binaryPath);
+
+        $io->success(sprintf('Updated to %s.', $release['tag_name']));
+        return Command::SUCCESS;
+    }
+
+    private function fetchLatestRelease(): ?array
+    {
+        $url = sprintf(self::API_URL, Version::GITHUB_REPO);
+        $context = stream_context_create([
+            'http' => [
+                'header' => "User-Agent: md-server/" . Version::CURRENT . "\r\n",
+                'timeout' => 10,
+            ],
+        ]);
+
+        $json = @file_get_contents($url, false, $context);
+        if ($json === false) {
+            return null;
+        }
+
+        $data = json_decode($json, true);
+        return is_array($data) && isset($data['tag_name']) ? $data : null;
+    }
+
+    private function detectAssetName(): ?string
+    {
+        if (\Phar::running() !== '') {
+            return 'md-server.phar';
+        }
+
+        $os = PHP_OS_FAMILY === 'Darwin' ? 'darwin' : 'linux';
+        $arch = php_uname('m');
+
+        $arch = match ($arch) {
+            'x86_64', 'amd64' => 'x86_64',
+            'aarch64', 'arm64' => 'aarch64',
+            default => null,
+        };
+
+        if ($arch === null) {
+            return null;
+        }
+
+        return "md-server-{$os}-{$arch}";
+    }
+
+    private function findAssetUrl(array $release, string $assetName): ?string
+    {
+        foreach ($release['assets'] ?? [] as $asset) {
+            if ($asset['name'] === $assetName) {
+                return $asset['browser_download_url'];
+            }
+        }
+        return null;
+    }
+
+    private function getCurrentBinaryPath(): ?string
+    {
+        $pharPath = \Phar::running(false);
+        if ($pharPath !== '') {
+            return $pharPath;
+        }
+
+        // Static binary — PHP_BINARY points to the combined micro+phar
+        return PHP_BINARY ?: null;
+    }
+
+    private function download(string $url, string $destination): bool
+    {
+        $context = stream_context_create([
+            'http' => [
+                'header' => "User-Agent: md-server/" . Version::CURRENT . "\r\n",
+                'follow_location' => true,
+                'timeout' => 120,
+            ],
+        ]);
+
+        $source = @fopen($url, 'r', false, $context);
+        if ($source === false) {
+            return false;
+        }
+
+        $dest = fopen($destination, 'w');
+        if ($dest === false) {
+            fclose($source);
+            return false;
+        }
+
+        stream_copy_to_stream($source, $dest);
+        fclose($source);
+        fclose($dest);
+
+        return filesize($destination) > 0;
+    }
+}

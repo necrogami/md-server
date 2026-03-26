@@ -70,6 +70,12 @@ jobs:
           key: composer-phar-${{ hashFiles('composer.json') }}
           restore-keys: composer-phar-
 
+      - name: Stamp version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          sed -i "s/CURRENT = 'dev'/CURRENT = '${VERSION}'/" src/Version.php
+          cat src/Version.php
+
       - name: Install dependencies
         run: composer update --prefer-dist --no-progress --no-dev --classmap-authoritative
 

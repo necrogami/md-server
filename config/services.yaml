@@ -39,3 +39,5 @@ services:
         tags: ['controller.service_arguments']
 
     MdServer\Command\ServeCommand: ~
+
+    MdServer\Command\SelfUpdateCommand: ~
