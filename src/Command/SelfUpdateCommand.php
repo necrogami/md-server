@@ -29,7 +29,12 @@ class SelfUpdateCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
+        $runtime = PHP_SAPI === 'micro' ? 'static binary' : (\Phar::running() !== '' ? 'phar' : 'source');
+        $os = PHP_OS_FAMILY;
+        $arch = php_uname('m');
+
         $io->text(sprintf('Current version: <info>%s</info>', Version::CURRENT));
+        $io->text(sprintf('Runtime: <info>%s</info> (%s %s)', $runtime, $os, $arch));
 
         $release = $this->fetchLatestRelease();
         if ($release === null) {
@@ -121,7 +126,9 @@ class SelfUpdateCommand extends Command
 
     private function detectAssetName(): ?string
     {
-        if (\Phar::running() !== '') {
+        // micro SAPI = static binary (micro.sfx + PHAR combined)
+        // cli SAPI + Phar::running() = standalone PHAR via `php md-server.phar`
+        if (PHP_SAPI !== 'micro' && \Phar::running() !== '') {
             return 'md-server.phar';
         }
 
@@ -161,13 +168,18 @@ class SelfUpdateCommand extends Command
 
     private function getCurrentBinaryPath(): ?string
     {
+        if (PHP_SAPI === 'micro') {
+            // Static binary — PHP_BINARY points to the combined micro+phar
+            return PHP_BINARY ?: null;
+        }
+
+        // PHAR — Phar::running(false) returns the filesystem path
         $pharPath = \Phar::running(false);
         if ($pharPath !== '') {
             return $pharPath;
         }
 
-        // Static binary — PHP_BINARY points to the combined micro+phar
-        return PHP_BINARY ?: null;
+        return null;
     }
 
     private function download(string $url, string $destination): bool
