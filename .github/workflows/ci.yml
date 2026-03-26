@@ -24,6 +24,13 @@ jobs:
           extensions: mbstring, xml, ctype, iconv
           coverage: none
 
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.json') }}
+          restore-keys: composer-${{ matrix.php }}-
+
       - name: Install dependencies
         run: composer update --prefer-dist --no-progress
 
