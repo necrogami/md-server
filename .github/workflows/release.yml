@@ -10,6 +10,7 @@ permissions:
 env:
   PHP_VERSION: '8.4'
   MICRO_PHP_VERSION: '8.4.19'
+  MICRO_BASE_URL: 'https://dl.static-php.dev/static-php-cli/common'
 
 jobs:
   test:
@@ -79,71 +80,38 @@ jobs:
           name: md-server-phar
           path: md-server.phar
 
-  build-binaries:
-    name: Build ${{ matrix.name }}
+  release:
+    name: Build binaries & Release
     needs: build-phar
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - name: linux-x86_64
-            micro_url: https://dl.static-php.dev/static-php-cli/common/php-8.4.19-micro-linux-x86_64.tar.gz
-            binary_name: md-server-linux-x86_64
-          - name: linux-aarch64
-            micro_url: https://dl.static-php.dev/static-php-cli/common/php-8.4.19-micro-linux-aarch64.tar.gz
-            binary_name: md-server-linux-aarch64
-          - name: darwin-x86_64
-            micro_url: https://dl.static-php.dev/static-php-cli/common/php-8.4.19-micro-macos-x86_64.tar.gz
-            binary_name: md-server-darwin-x86_64
-          - name: darwin-aarch64
-            micro_url: https://dl.static-php.dev/static-php-cli/common/php-8.4.19-micro-macos-aarch64.tar.gz
-            binary_name: md-server-darwin-aarch64
-
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download PHAR
         uses: actions/download-artifact@v4
         with:
           name: md-server-phar
 
-      - name: Download prebuilt micro.sfx
-        run: |
-          curl -sL "${{ matrix.micro_url }}" -o micro.tar.gz
-          tar xzf micro.tar.gz
-          ls -la micro.sfx
-
-      - name: Combine micro + PHAR into static binary
-        run: |
-          cat micro.sfx md-server.phar > ${{ matrix.binary_name }}
-          chmod +x ${{ matrix.binary_name }}
-          ls -lh ${{ matrix.binary_name }}
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.binary_name }}
-          path: ${{ matrix.binary_name }}
-
-  release:
-    name: Create Release
-    needs: [build-phar, build-binaries]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist/
-
-      - name: Prepare release assets
+      - name: Build static binaries
         run: |
           mkdir -p release/
-          cp dist/md-server-phar/md-server.phar release/
-          cp dist/md-server-linux-x86_64/md-server-linux-x86_64 release/
-          cp dist/md-server-linux-aarch64/md-server-linux-aarch64 release/
-          cp dist/md-server-darwin-x86_64/md-server-darwin-x86_64 release/
-          cp dist/md-server-darwin-aarch64/md-server-darwin-aarch64 release/
-          cd release && sha256sum * > checksums.txt
+          cp md-server.phar release/
+
+          targets="linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64"
+          for target in $targets; do
+            echo "::group::Building md-server-${target}"
+            curl -sL "${MICRO_BASE_URL}/php-${MICRO_PHP_VERSION}-micro-${target}.tar.gz" -o micro.tar.gz
+            tar xzf micro.tar.gz
+            output_name="md-server-$(echo $target | sed 's/macos/darwin/')"
+            cat micro.sfx md-server.phar > "release/${output_name}"
+            chmod +x "release/${output_name}"
+            ls -lh "release/${output_name}"
+            rm -f micro.tar.gz micro.sfx
+            echo "::endgroup::"
+          done
+
+      - name: Generate checksums
+        run: cd release && sha256sum * > checksums.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
