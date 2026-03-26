@@ -2,13 +2,20 @@
 
 namespace MdServer\Command;
 
+use MdServer\Kernel;
+use Nyholm\Psr7\Factory\Psr17Factory;
+use React\EventLoop\Loop;
+use React\Http\HttpServer;
+use React\Http\Message\Response as ReactResponse;
+use React\Socket\SocketServer;
+use Symfony\Bridge\PsrHttpMessage\Factory\HttpFoundationFactory;
+use Symfony\Bridge\PsrHttpMessage\Factory\PsrHttpFactory;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\Process\Process;
 
 #[AsCommand(
     name: 'serve',
@@ -40,86 +47,57 @@ class ServeCommand extends Command
         $host = $input->getOption('host');
         $port = $input->getOption('port');
 
-        $routerPath = $this->findRouterScript();
-        if ($routerPath === null) {
-            $io->error('Could not locate router.php');
-            return Command::FAILURE;
-        }
-
-        $env = [
-            'MD_SERVER_ROOT' => $root,
-            'APP_ENV' => 'prod',
-            'APP_DEBUG' => '0',
-        ];
+        // Set env vars for the kernel to pick up
+        $_ENV['MD_SERVER_ROOT'] = $root;
+        $_SERVER['MD_SERVER_ROOT'] = $root;
 
         if ($input->getOption('theme')) {
-            $env['MD_SERVER_THEME'] = $input->getOption('theme');
+            putenv('MD_SERVER_THEME=' . $input->getOption('theme'));
         }
         if ($input->getOption('no-tree')) {
-            $env['MD_SERVER_NO_TREE'] = '1';
+            putenv('MD_SERVER_NO_TREE=1');
         }
 
-        $process = new Process(
-            [PHP_BINARY, '-S', $host . ':' . $port, $routerPath],
-            $root,
-            $env,
-        );
+        // Boot a fresh Symfony kernel for handling HTTP requests
+        $kernel = new Kernel('prod', false);
+        $kernel->boot();
 
-        $process->setTimeout(null);
+        $psr17Factory = new Psr17Factory();
+        $httpFoundationFactory = new HttpFoundationFactory();
+        $psrHttpFactory = new PsrHttpFactory($psr17Factory, $psr17Factory, $psr17Factory, $psr17Factory);
 
-        $io->success(sprintf('md-server started on http://%s:%s', $host, $port));
+        $server = new HttpServer(function (\Psr\Http\Message\ServerRequestInterface $request) use ($kernel, $httpFoundationFactory, $psrHttpFactory, $output) {
+            try {
+                $symfonyRequest = $httpFoundationFactory->createRequest($request);
+                $symfonyResponse = $kernel->handle($symfonyRequest);
+
+                $output->writeln(sprintf(
+                    '<info>[%s]</info> %s %s <comment>%d</comment>',
+                    date('H:i:s'),
+                    $symfonyRequest->getMethod(),
+                    $symfonyRequest->getPathInfo(),
+                    $symfonyResponse->getStatusCode(),
+                ));
+
+                $psrResponse = $psrHttpFactory->createResponse($symfonyResponse);
+                $kernel->terminate($symfonyRequest, $symfonyResponse);
+
+                return $psrResponse;
+            } catch (\Throwable $e) {
+                $output->writeln(sprintf('<error>[%s] %s: %s</error>', date('H:i:s'), get_class($e), $e->getMessage()));
+                return new ReactResponse(500, ['Content-Type' => 'text/plain'], 'Internal Server Error');
+            }
+        });
+
+        $listen = "{$host}:{$port}";
+        $socket = new SocketServer($listen);
+
+        $io->success(sprintf('md-server started on http://%s', $listen));
         $io->text(sprintf('Serving: %s', $root));
         $io->text('Press Ctrl+C to stop.');
 
-        $process->start(function (string $type, string $buffer) use ($output) {
-            $output->write($buffer);
-        });
-
-        usleep(500_000);
-        if (!$process->isRunning()) {
-            $io->error('Server failed to start:');
-            $io->text($process->getErrorOutput());
-            return Command::FAILURE;
-        }
-
-        $shutdownHandler = function () use ($process) {
-            if ($process->isRunning()) {
-                $process->signal(15);
-                $process->wait();
-            }
-        };
-
-        register_shutdown_function($shutdownHandler);
-
-        if (function_exists('pcntl_signal')) {
-            pcntl_signal(SIGINT, function () use ($shutdownHandler) {
-                $shutdownHandler();
-                exit(0);
-            });
-            pcntl_signal(SIGTERM, function () use ($shutdownHandler) {
-                $shutdownHandler();
-                exit(0);
-            });
-        }
-
-        $process->wait();
+        $server->listen($socket);
 
         return Command::SUCCESS;
-    }
-
-    private function findRouterScript(): ?string
-    {
-        $pharPath = \Phar::running();
-        if ($pharPath !== '') {
-            return $pharPath . '/router.php';
-        }
-
-        $projectRoot = dirname(__DIR__, 2);
-        $routerPath = $projectRoot . '/router.php';
-        if (is_file($routerPath)) {
-            return $routerPath;
-        }
-
-        return null;
     }
 }

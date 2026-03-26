@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+env:
+  PHP_VERSION: '8.4'
+  MICRO_PHP_VERSION: '8.4.19'
+
 jobs:
   test:
     name: Tests
@@ -17,7 +21,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: ${{ env.PHP_VERSION }}
           extensions: mbstring, xml, ctype, iconv
           ini-values: phar.readonly=0
           coverage: none
@@ -45,7 +49,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: ${{ env.PHP_VERSION }}
           extensions: mbstring, xml, ctype, iconv
           ini-values: phar.readonly=0
           coverage: none
@@ -75,107 +79,53 @@ jobs:
           name: md-server-phar
           path: md-server.phar
 
-  build-linux:
-    name: Build Linux (${{ matrix.arch }})
+  build-binaries:
+    name: Build ${{ matrix.name }}
     needs: build-phar
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - arch: x86_64
-            platform: linux/amd64
-          - arch: aarch64
-            platform: linux/arm64
+          - name: linux-x86_64
+            micro_url: https://dl.static-php.dev/static-php-cli/common/php-8.4.19-micro-linux-x86_64.tar.gz
+            binary_name: md-server-linux-x86_64
+          - name: linux-aarch64
+            micro_url: https://dl.static-php.dev/static-php-cli/common/php-8.4.19-micro-linux-aarch64.tar.gz
+            binary_name: md-server-linux-aarch64
+          - name: darwin-x86_64
+            micro_url: https://dl.static-php.dev/static-php-cli/common/php-8.4.19-micro-macos-x86_64.tar.gz
+            binary_name: md-server-darwin-x86_64
+          - name: darwin-aarch64
+            micro_url: https://dl.static-php.dev/static-php-cli/common/php-8.4.19-micro-macos-aarch64.tar.gz
+            binary_name: md-server-darwin-aarch64
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Download PHAR
+        uses: actions/download-artifact@v4
+        with:
+          name: md-server-phar
 
-      - name: Set up QEMU
-        if: matrix.arch == 'aarch64'
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Prepare app
+      - name: Download prebuilt micro.sfx
         run: |
-          echo 'APP_ENV=prod' > .env.local
-          echo 'APP_DEBUG=0' >> .env.local
+          curl -sL "${{ matrix.micro_url }}" -o micro.tar.gz
+          tar xzf micro.tar.gz
+          ls -la micro.sfx
 
-      - name: Build static binary
+      - name: Combine micro + PHAR into static binary
         run: |
-          docker buildx build \
-            --platform ${{ matrix.platform }} \
-            --build-arg PLATFORM=${{ matrix.platform }} \
-            --cache-from type=gha,scope=frankenphp-${{ matrix.arch }} \
-            --cache-to type=gha,mode=max,scope=frankenphp-${{ matrix.arch }} \
-            --load \
-            -t md-server-static \
-            -f static-build.Dockerfile .
-
-      - name: Extract binary
-        run: |
-          docker create --name extract md-server-static
-          docker cp extract:/go/src/app/dist/frankenphp-linux-${{ matrix.arch }} md-server-linux-${{ matrix.arch }}
-          docker rm extract
-          chmod +x md-server-linux-${{ matrix.arch }}
+          cat micro.sfx md-server.phar > ${{ matrix.binary_name }}
+          chmod +x ${{ matrix.binary_name }}
+          ls -lh ${{ matrix.binary_name }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: md-server-linux-${{ matrix.arch }}
-          path: md-server-linux-${{ matrix.arch }}
-
-  build-macos:
-    name: Build macOS (aarch64)
-    needs: build-phar
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Prepare app
-        run: |
-          echo 'APP_ENV=prod' > .env.local
-          echo 'APP_DEBUG=0' >> .env.local
-
-      - name: Cache SPC build artifacts
-        uses: actions/cache@v4
-        with:
-          path: /tmp/frankenphp/dist/static-php-cli
-          key: spc-macos-aarch64-v1.6.4-${{ hashFiles('composer.json') }}
-          restore-keys: spc-macos-aarch64-v1.6.4-
-
-      - name: Clone FrankenPHP
-        run: |
-          if [ ! -d /tmp/frankenphp/.git ]; then
-            git clone --depth=1 --branch v1.6.4 https://github.com/dunglas/frankenphp /tmp/frankenphp
-          else
-            cd /tmp/frankenphp && git fetch --depth=1 origin tag v1.6.4 && git checkout v1.6.4
-          fi
-
-      - name: Build static binary
-        working-directory: /tmp/frankenphp
-        run: |
-          EMBED=${{ github.workspace }} \
-          PHP_EXTENSIONS="mbstring,xml,dom,ctype,iconv,tokenizer,filter,phar,zlib,opcache,simplexml,yaml" \
-          NO_COMPRESS=1 \
-          ./build-static.sh
-
-      - name: Copy binary
-        run: |
-          cp /tmp/frankenphp/dist/frankenphp-mac-aarch64 md-server-darwin-aarch64
-          chmod +x md-server-darwin-aarch64
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: md-server-darwin-aarch64
-          path: md-server-darwin-aarch64
+          name: ${{ matrix.binary_name }}
+          path: ${{ matrix.binary_name }}
 
   release:
     name: Create Release
-    needs: [build-phar, build-linux]
-    if: always() && needs.build-phar.result == 'success' && needs.build-linux.result == 'success'
+    needs: [build-phar, build-binaries]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -191,10 +141,8 @@ jobs:
           cp dist/md-server-phar/md-server.phar release/
           cp dist/md-server-linux-x86_64/md-server-linux-x86_64 release/
           cp dist/md-server-linux-aarch64/md-server-linux-aarch64 release/
-          # macOS is optional — include if available
-          if [ -f dist/md-server-darwin-aarch64/md-server-darwin-aarch64 ]; then
-            cp dist/md-server-darwin-aarch64/md-server-darwin-aarch64 release/
-          fi
+          cp dist/md-server-darwin-x86_64/md-server-darwin-x86_64 release/
+          cp dist/md-server-darwin-aarch64/md-server-darwin-aarch64 release/
           cd release && sha256sum * > checksums.txt
 
       - name: Create GitHub Release

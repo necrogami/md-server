@@ -6,7 +6,6 @@
         "assets"
     ],
     "files": [
-        "router.php",
         ".env"
     ],
     "finder": [
