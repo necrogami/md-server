@@ -125,11 +125,14 @@ class SelfUpdateCommand extends Command
             return 'md-server.phar';
         }
 
-        $os = PHP_OS_FAMILY === 'Darwin' ? 'darwin' : 'linux';
-        $arch = php_uname('m');
+        $os = match (PHP_OS_FAMILY) {
+            'Darwin' => 'darwin',
+            'Windows' => 'windows',
+            default => 'linux',
+        };
 
-        $arch = match ($arch) {
-            'x86_64', 'amd64' => 'x86_64',
+        $arch = match (php_uname('m')) {
+            'x86_64', 'amd64', 'AMD64' => 'x86_64',
             'aarch64', 'arm64' => 'aarch64',
             default => null,
         };
@@ -138,7 +141,12 @@ class SelfUpdateCommand extends Command
             return null;
         }
 
-        return "md-server-{$os}-{$arch}";
+        $name = "md-server-{$os}-{$arch}";
+        if ($os === 'windows') {
+            $name .= '.exe';
+        }
+
+        return $name;
     }
 
     private function findAssetUrl(array $release, string $assetName): ?string

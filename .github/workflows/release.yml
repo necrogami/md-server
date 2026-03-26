@@ -10,6 +10,7 @@ permissions:
 env:
   PHP_VERSION: '8.4'
   MICRO_PHP_VERSION: '8.4.19'
+  MICRO_WIN_VERSION: '8.4.18'
   MICRO_BASE_URL: 'https://dl.static-php.dev/static-php-cli/common'
 
 jobs:
@@ -111,6 +112,7 @@ jobs:
           mkdir -p release/
           cp md-server.phar release/
 
+          # Unix targets (tar.gz from common/)
           targets="linux-x86_64 linux-aarch64 macos-x86_64 macos-aarch64"
           for target in $targets; do
             echo "::group::Building md-server-${target}"
@@ -123,6 +125,15 @@ jobs:
             rm -f micro.tar.gz micro.sfx
             echo "::endgroup::"
           done
+
+          # Windows target (zip from windows/spc-max/, slightly older PHP)
+          echo "::group::Building md-server-windows-x86_64"
+          curl -sL "https://dl.static-php.dev/static-php-cli/windows/spc-max/php-${MICRO_WIN_VERSION}-micro-win.zip" -o micro-win.zip
+          unzip -o micro-win.zip
+          cat micro.sfx md-server.phar > "release/md-server-windows-x86_64.exe"
+          ls -lh "release/md-server-windows-x86_64.exe"
+          rm -f micro-win.zip micro.sfx
+          echo "::endgroup::"
 
       - name: Generate checksums
         run: cd release && sha256sum * > checksums.txt
@@ -182,6 +193,7 @@ jobs:
             echo "| \`md-server-linux-aarch64\` | Linux ARM64 | None |"
             echo "| \`md-server-darwin-x86_64\` | macOS Intel | None |"
             echo "| \`md-server-darwin-aarch64\` | macOS Apple Silicon | None |"
+            echo "| \`md-server-windows-x86_64.exe\` | Windows x64 | None |"
             echo ""
             echo "### Quick start"
             echo "\`\`\`bash"
