@@ -169,8 +169,23 @@ class SelfUpdateCommand extends Command
     private function getCurrentBinaryPath(): ?string
     {
         if (PHP_SAPI === 'micro') {
-            // Static binary — PHP_BINARY points to the combined micro+phar
-            return PHP_BINARY ?: null;
+            // Static binary — try multiple methods to find the executable path
+            // PHP_BINARY may be empty in micro SAPI
+            if (PHP_BINARY !== '') {
+                return PHP_BINARY;
+            }
+            // Linux: /proc/self/exe is a symlink to the running binary
+            if (is_link('/proc/self/exe')) {
+                return readlink('/proc/self/exe');
+            }
+            // argv[0] as last resort
+            if (isset($_SERVER['argv'][0])) {
+                $path = realpath($_SERVER['argv'][0]);
+                if ($path !== false) {
+                    return $path;
+                }
+            }
+            return null;
         }
 
         // PHAR — Phar::running(false) returns the filesystem path
