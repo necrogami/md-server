@@ -52,13 +52,7 @@ class PageController extends AbstractController
     private function resolvePath(string $root, string $path): ?string
     {
         if ($path === '') {
-            foreach (['index.md', 'README.md'] as $index) {
-                $candidate = $root . '/' . $index;
-                if (is_file($candidate)) {
-                    return $candidate;
-                }
-            }
-            return null;
+            return $this->findIndexFile($root);
         }
 
         // Try as .md file
@@ -77,11 +71,23 @@ class PageController extends AbstractController
 
         // Try as directory with index
         if ($real !== false && str_starts_with($real, $root) && is_dir($real)) {
-            foreach (['index.md', 'README.md'] as $index) {
-                $indexPath = $real . '/' . $index;
-                if (is_file($indexPath)) {
-                    return $indexPath;
-                }
+            return $this->findIndexFile($real);
+        }
+
+        return null;
+    }
+
+    private function findIndexFile(string $dir): ?string
+    {
+        $items = @scandir($dir);
+        if ($items === false) {
+            return null;
+        }
+
+        foreach ($items as $item) {
+            $lower = strtolower($item);
+            if (($lower === 'index.md' || $lower === 'readme.md') && is_file($dir . '/' . $item)) {
+                return $dir . '/' . $item;
             }
         }
 
@@ -126,7 +132,14 @@ class PageController extends AbstractController
     private function render404(string $path, string $root, $config): Response
     {
         if ($path === '') {
-            return $this->renderGeneratedIndex($root, $config);
+            return $this->renderGeneratedIndex($root, '', $config);
+        }
+
+        // Check if path is a directory — show file listing instead of 404
+        $candidate = $root . '/' . $path;
+        $real = realpath($candidate);
+        if ($real !== false && str_starts_with($real, $root) && is_dir($real)) {
+            return $this->renderGeneratedIndex($root, $path, $config);
         }
 
         $theme = $this->themeResolver->resolve($config->themeMode);
@@ -151,15 +164,26 @@ class PageController extends AbstractController
         return $response;
     }
 
-    private function renderGeneratedIndex(string $root, $config): Response
+    private function renderGeneratedIndex(string $root, string $subPath, $config): Response
     {
         $theme = $this->themeResolver->resolve($config->themeMode);
         $tree = $this->fileTreeBuilder->build($root, $config->ignorePatterns);
 
+        $entries = $subPath !== ''
+            ? $this->fileTreeBuilder->buildForPath($root, $subPath, $config->ignorePatterns)
+            : $tree;
+
+        $title = $subPath !== '' ? basename($subPath) : 'Documentation';
+        $breadcrumbs = $subPath !== '' ? explode('/', trim($subPath, '/')) : [];
+        $breadcrumbPaths = $this->buildBreadcrumbPaths($breadcrumbs);
+
         $response = $this->render('index.html.twig', [
-            'entries' => $tree,
+            'title' => $title,
+            'entries' => $entries,
             'tree' => $tree,
-            'current_path' => '',
+            'current_path' => rtrim($subPath, '/'),
+            'breadcrumbs' => $breadcrumbs,
+            'breadcrumb_paths' => $breadcrumbPaths,
             'theme_mode' => $theme->activeMode,
             'active_theme' => $this->getActiveThemeName($theme),
             'available_themes' => $theme->availableThemes,

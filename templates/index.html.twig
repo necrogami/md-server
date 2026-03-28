@@ -1,11 +1,11 @@
 {# templates/index.html.twig #}
 {% extends 'layout.html.twig' %}
 
-{% block title %}Index — md-server{% endblock %}
+{% block title %}{{ title|default('Documentation') }} — md-server{% endblock %}
 
 {% block content %}
 <article class="md-article markdown-body">
-    <h1>Documentation</h1>
+    <h1>{{ title|default('Documentation') }}</h1>
     {% if entries is not empty %}
     <ul>
         {% for entry in entries %}

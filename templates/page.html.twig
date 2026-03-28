@@ -4,7 +4,13 @@
 {% block title %}{{ page.title }} — md-server{% endblock %}
 
 {% block content %}
-<article class="md-article markdown-body">
-    {{ page.renderedHtml|raw }}
-</article>
+<div class="md-content-body">
+    <article class="md-article markdown-body">
+        {{ page.renderedHtml|raw }}
+    </article>
+    <nav class="md-toc" aria-label="On this page">
+        <div class="md-toc-title">On this page</div>
+        <ul class="md-toc-list"></ul>
+    </nav>
+</div>
 {% endblock %}

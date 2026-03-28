@@ -12,6 +12,17 @@ class FileTreeBuilder
     }
 
     /** @return TreeNode[] */
+    public function buildForPath(string $root, string $subPath, array $ignorePatterns = []): array
+    {
+        $dir = $root . '/' . $subPath;
+        if (!is_dir($dir)) {
+            return [];
+        }
+
+        return $this->scanDirectory($dir, $root, $ignorePatterns);
+    }
+
+    /** @return TreeNode[] */
     private function scanDirectory(string $dir, string $root, array $ignorePatterns): array
     {
         $dirs = [];

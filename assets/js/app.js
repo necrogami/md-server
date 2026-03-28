@@ -82,4 +82,60 @@
             }
         }
     });
+
+    // Build table of contents from headings
+    (function() {
+        var tocList = document.querySelector('.md-toc-list');
+        var tocNav = document.querySelector('.md-toc');
+        if (!tocList || !tocNav) return;
+
+        var article = document.querySelector('.md-article');
+        if (!article) return;
+
+        var headings = article.querySelectorAll('h2, h3');
+        if (headings.length < 2) {
+            tocNav.style.display = 'none';
+            return;
+        }
+
+        headings.forEach(function(heading, i) {
+            if (!heading.id) {
+                heading.id = 'heading-' + i + '-' + heading.textContent
+                    .toLowerCase()
+                    .replace(/[^\w\s-]/g, '')
+                    .replace(/\s+/g, '-')
+                    .substring(0, 60);
+            }
+
+            var li = document.createElement('li');
+            li.className = 'md-toc-item';
+            if (heading.tagName === 'H3') {
+                li.className += ' md-toc-item-h3';
+            }
+
+            var a = document.createElement('a');
+            a.href = '#' + heading.id;
+            a.textContent = heading.textContent;
+            li.appendChild(a);
+            tocList.appendChild(li);
+        });
+
+        // Scroll spy
+        var tocLinks = tocList.querySelectorAll('a');
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    tocLinks.forEach(function(link) {
+                        link.classList.remove('active');
+                    });
+                    var active = tocList.querySelector('a[href="#' + entry.target.id + '"]');
+                    if (active) active.classList.add('active');
+                }
+            });
+        }, { rootMargin: '0px 0px -70% 0px', threshold: 0 });
+
+        headings.forEach(function(heading) {
+            observer.observe(heading);
+        });
+    })();
 })();
